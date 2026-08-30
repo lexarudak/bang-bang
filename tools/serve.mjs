@@ -68,13 +68,19 @@ createServer(async (req, res) => {
 			return;
 		}
 
+		// read first: writing headers before the read means a missing file throws
+		// after they are already sent, and the 404 attempt then kills the process
+		const buf = await readFile(file);
 		res.writeHead(200, {
 			"content-type": MIME[extname(file).toLowerCase()] || "application/octet-stream",
 			"cache-control": "no-store",
 		});
-		res.end(await readFile(file));
+		res.end(buf);
 	} catch {
-		res.writeHead(404, { "content-type": "text/plain; charset=utf-8" }).end("404");
+		if (!res.headersSent) {
+			res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+		}
+		res.end("404");
 	}
 }).listen(PORT, () => {
 	console.log("site → http://localhost:" + PORT + "  (live reload on save)");

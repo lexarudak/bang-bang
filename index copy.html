@@ -1,3 +1,20 @@
+<!doctype html>
+<html lang="ru">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width,initial-scale=1">
+	<title>Мария Сокирко — врач-косметолог</title>
+	<meta name="description" content="Врач-косметолог в Москве. Работа с лицом как с портретом — бережно и точно. Телеграм-канал о работе и результатах.">
+	<meta name="theme-color" content="#0e0e12">
+	<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20fill%3D%22%230e0e12%22%2F%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%2216%22%20r%3D%228%22%20fill%3D%22%23ff5b3d%22%2F%3E%3C%2Fsvg%3E">
+	<meta property="og:type" content="website">
+	<meta property="og:url" content="https://lexarudak.github.io/bang-bang/">
+	<meta property="og:title" content="Мария Сокирко — врач-косметолог">
+	<meta property="og:description" content="Врач-косметолог в Москве. Работа с лицом как с портретом — бережно и точно. Телеграм-канал о работе и результатах.">
+	<meta property="og:image" content="https://lexarudak.github.io/bang-bang/og.jpg">
+	<meta name="twitter:card" content="summary_large_image">
+</head>
+<body>
 <title>Четыре обложки</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link
@@ -583,30 +600,19 @@
 		}
 	}
 	@media (min-width: 821px) {
-		/* Карусель на десктопе крупнее. Размер задаём шириной, высоту считает
-		   aspect-ratio — так кадр не вылезет ни за свою колонку, ни за экран.
-
-		   Три величины, из которых он выбирается:
-		   was  — прежний размер, ниже него не опускаемся;
-		   want — цель, ровно +30%: 65vh вместо 50vh, потолок 728px вместо 560.
-		          Второй min — чтобы на низких экранах кадр не выдавил стрелки
-		          за нижнее поле обложки (280px — поля обложки + стрелки + отступ);
-		   fits — сколько реально влезает по ширине. Карусель рисует ещё два
-		          слайда по бокам, её полный разлёт примерно вдвое шире кадра,
-		          поэтому потолок считаем от ширины экрана, а не от колонки.
-		          Полные +30% получаются примерно от 1700–1800px, ниже кадр
-		          плавно ужимается до того, что помещается целиком.
-
-		   perspective держим пропорционально кадру (прежние 1400px при кадре
-		   316px — это ровно тот же коэффициент), иначе на разных ширинах разворот
-		   боковых слайдов выглядел бы по-разному. */
+		/* Карусель на десктопе крупнее ровно на 30%: 65vh вместо 50vh, потолок
+		   728px вместо 560. Размер задаём через ширину, высоту считает
+		   aspect-ratio — так кадр не вылезет ни за свою колонку (min со 100%),
+		   ни за экран по высоте (min со 100vh за вычетом полей обложки, стрелок
+		   и отступа над ними). perspective растёт вместе с кадром, иначе разворот
+		   боковых слайдов стал бы заметно резче. */
 		.cara-frame {
-			--cara-was: calc(0.75 * clamp(240px, 50vh, 560px));
-			--cara-want: calc(0.75 * clamp(312px, min(65vh, 100vh - 280px), 728px));
-			--cara-size: max(var(--cara-was), min(var(--cara-want), 24vw));
-			width: min(100%, var(--cara-size));
+			width: min(
+				100%,
+				calc(0.75 * clamp(312px, min(65vh, 100vh - 280px), 728px))
+			);
 			height: auto;
-			perspective: calc(var(--cara-size) * 4.43);
+			perspective: 1820px;
 		}
 	}
 
@@ -1596,3 +1602,6 @@
 		requestAnimationFrame(loop);
 	})();
 </script>
+
+</body>
+</html>
