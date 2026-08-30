@@ -56,13 +56,17 @@ node tools/build.mjs --base=https://твой-домен.ru   # + Open Graph дл
 
 ## Деплой
 
-Netlify, настройки в `netlify.toml` — команда `node tools/build.mjs --base=$URL`,
-публикуется `dist`. `$URL` подставляет сам Netlify, это адрес сайта: из него
-берутся og-теги и `og.jpg`.
+GitHub Pages, настройки в `.github/workflows/deploy.yml`. Каждый пуш в `main`
+собирает `dist/` и публикует его: https://lexarudak.github.io/bang-bang
 
 `npm install` не выполняется — package.json в проекте нет, а `build.mjs` обходится
-встроенными модулями Node. `dist/` в git не коммитится, Netlify пересобирает его
-на каждый пуш в `main`.
+встроенными модулями Node. `dist/` в git не коммитится, его пересобирает workflow.
+
+Адрес сайта нужен для og-тегов и `og.jpg` (превью ссылки в телеграме). По умолчанию
+берётся тот, что выдал Pages. Свой домен: прописать его в Settings → Pages →
+Custom domain и завести переменную `SITE_BASE` (Settings → Secrets and variables →
+Actions → Variables) со значением вида `https://sokirko.ru` — workflow сам положит
+рядом `CNAME` и подставит домен в og-теги.
 
 ## Что где править
 

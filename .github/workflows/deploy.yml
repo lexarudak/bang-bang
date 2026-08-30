@@ -1,0 +1,63 @@
+# Публикация сайта на GitHub Pages: собираем dist/ и отдаём его как артефакт Pages.
+# Ничего лишнего в страницу не подмешивается — никаких баннеров хостинга.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Один деплой за раз; новый push отменяет предыдущий, ещё не доехавший.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      # enablement: true включает Pages на репозитории, если он ещё не включён,
+      # так что руками в настройках ничего трогать не нужно.
+      - id: pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      # base нужен для og-тегов (превью ссылки в телеграме). По умолчанию это
+      # адрес, который выдал сам Pages; свой домен задаётся переменной SITE_BASE
+      # в Settings → Secrets and variables → Actions → Variables.
+      - name: Build
+        env:
+          PAGES_URL: ${{ steps.pages.outputs.base_url }}
+          SITE_BASE: ${{ vars.SITE_BASE }}
+        run: node tools/build.mjs --base="${SITE_BASE:-$PAGES_URL}"
+
+      # Свой домен Pages требует ещё и файлом CNAME рядом с индексом.
+      - name: CNAME
+        if: vars.SITE_BASE != ''
+        run: echo "${{ vars.SITE_BASE }}" | sed -E 's#^https?://##; s#/.*##' > dist/CNAME
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
