@@ -8,7 +8,7 @@
 	:root {
 		--coal: #19191f;
 		--cream: #f3ede3;
-		--electric: #f08798;
+		--electric: #57b1e2;
 		--coral: #f3ede3;
 		--display: "Unbounded", "Arial Black", system-ui, sans-serif;
 		--body: "Golos Text", system-ui, sans-serif;
@@ -186,6 +186,12 @@
 		backface-visibility: hidden;
 	}
 	.cara-nav {
+		/* Управление каруселью: стрелки и неактивные полоски слайдов выглядят
+		   одинаково, активная полоска и стрелка под курсором — в полную силу.
+		   Цвет задан явно: .cara-dot — это <button>, и без этого он брал бы не
+		   цвет обложки, а дефолтный чёрный от браузера. */
+		--cara-mute: var(--coal);
+		--cara-dim: 0.22;
 		display: flex;
 		align-items: center;
 		gap: clamp(12px, 1.6vw, 20px);
@@ -201,12 +207,13 @@
 		border: 1px solid currentColor;
 		border-radius: 50%;
 		background: none;
-		color: inherit;
+		color: var(--cara-mute);
 		cursor: pointer;
-		opacity: 0.55;
+		opacity: var(--cara-dim);
 		transition: opacity 0.2s ease;
 	}
-	.cara-arrow:hover {
+	.cara-arrow:hover,
+	.cara-arrow:focus-visible {
 		opacity: 1;
 	}
 	.cara-arrow:focus-visible {
@@ -223,8 +230,8 @@
 		height: 2px;
 		padding: 0;
 		border: none;
-		background: currentColor;
-		opacity: 0.22;
+		background: var(--cara-mute);
+		opacity: var(--cara-dim);
 		cursor: pointer;
 		transition: opacity 0.35s ease;
 	}
@@ -717,7 +724,7 @@
 		<h2><span class="line" data-split>УЗНАТЬ БОЛЬШЕ</span></h2>
 		<p class="lede">
 			Веду свой телеграм-канал, где фокусируюсь на своей жизни и своих работах,
-			показываю результат, делюсь рекомендациями, советами и своим опытом.
+			показываю результаты, делюсь рекомендациями, советами и своим опытом.
 		</p>
 		<a class="tg" href="https://t.me/dr_sokirko" target="_blank" rel="noopener"
 			>t.me/dr_sokirko</a
