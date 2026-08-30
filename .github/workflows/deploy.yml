@@ -27,21 +27,17 @@ jobs:
         with:
           node-version: "24"
 
-      # enablement: true включает Pages на репозитории, если он ещё не включён,
-      # так что руками в настройках ничего трогать не нужно.
-      - id: pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
       # base нужен для og-тегов (превью ссылки в телеграме). По умолчанию это
-      # адрес, который выдал сам Pages; свой домен задаётся переменной SITE_BASE
-      # в Settings → Secrets and variables → Actions → Variables.
+      # штатный адрес Pages для этого репозитория; свой домен задаётся переменной
+      # SITE_BASE в Settings → Secrets and variables → Actions → Variables.
       - name: Build
         env:
-          PAGES_URL: ${{ steps.pages.outputs.base_url }}
           SITE_BASE: ${{ vars.SITE_BASE }}
-        run: node tools/build.mjs --base="${SITE_BASE:-$PAGES_URL}"
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          default="https://$(echo "$OWNER" | tr 'A-Z' 'a-z').github.io/$REPO"
+          node tools/build.mjs --base="${SITE_BASE:-$default}"
 
       # Свой домен Pages требует ещё и файлом CNAME рядом с индексом.
       - name: CNAME
