@@ -1,77 +1,116 @@
-# React + TypeScript + Vite
+# Сайт-визитка · Мария Сокирко
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Одностраничный сайт-визитка врача-косметолога. Прокрутка переключает четыре
+полноэкранные «обложки»; каждая смена фона — своя геометрическая маска. По кнопке
+происходит взрыв.
 
-Currently, two official plugins are available:
+Всё лежит в одном самодостаточном HTML: фотографии вшиты как data-URI, звук
+синтезируется через Web Audio, внешних зависимостей нет — кроме Google Fonts.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+**Прототип:** https://claude.ai/code/artifact/8e38afec-2220-4958-b2bc-f8a7ac3d6ee1
 
-## React Compiler
-
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
-
-Note: This will impact Vite dev & build performances.
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Структура
 
 ```
+site/
+  covers.html      сам сайт — правится здесь
+  photos/          исходные фотографии (1.jpg … 5.jpg)
+  sound/           исходный звук взрыва
+tools/
+  serve.mjs        локальный просмотр с автоперезагрузкой
+  build.mjs        сборка standalone-страницы для хостинга
+dist/              результат сборки, в git не попадает
+```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+`site/photos/` и `site/sound/` — исходники. Сама страница их не читает: и фото,
+и звук вшиты в `covers.html` как base64. Эти папки нужны, чтобы было из чего
+пересобрать, если что-то меняется.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+`site/covers.html` — фрагмент без `<html>` и `<head>`: их подставляет либо
+`serve.mjs`, либо `build.mjs`. Так один и тот же файл работает и как исходник
+артефакта, и как исходник сборки.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Локально
 
+```bash
+node tools/serve.mjs          # http://localhost:8787
+PORT=3000 node tools/serve.mjs
+```
+
+Правишь `site/covers.html`, сохраняешь — вкладка перезагружается сама.
+
+## Сборка для хостинга
+
+```bash
+node tools/build.mjs
+node tools/build.mjs --base=https://твой-домен.ru   # + Open Graph для превью в Telegram
+```
+
+Кладёт `dist/index.html` — один файл, который можно просто залить на сервер.
+С флагом `--base` добавляются og-теги и `dist/og.jpg`, чтобы ссылка красиво
+разворачивалась в Telegram.
+
+Вес страницы около 660 КБ, почти всё — фотографии внутри файла. Так гарантированно
+нет битых картинок и лишних запросов. Если понадобится ускорить первую загрузку,
+фото можно вынести в отдельные файлы с отложенной подгрузкой.
+
+## Деплой
+
+Netlify, настройки в `netlify.toml` — команда `node tools/build.mjs --base=$URL`,
+публикуется `dist`. `$URL` подставляет сам Netlify, это адрес сайта: из него
+берутся og-теги и `og.jpg`.
+
+`npm install` не выполняется — package.json в проекте нет, а `build.mjs` обходится
+встроенными модулями Node. `dist/` в git не коммитится, Netlify пересобирает его
+на каждый пуш в `main`.
+
+## Что где править
+
+**Палитра** — `:root` в начале `site/covers.html`:
+
+```css
+--coal: #0e0e12;      /* 1-я обложка, кнопка взрыва, текст на светлом */
+--cream: #f3ede3;     /* 2-я обложка, текст на тёмном */
+--electric: #2587ff;  /* 3-я обложка */
+--coral: #ff5b3d;     /* 4-я обложка */
+```
+
+От этих четырёх переменных зависят фоны, цвет текста, полоса прокрутки и осколки
+взрыва. Не завязаны на них: подложка под фото, затемнение сцены во время взрыва,
+цвет улетающих обломков и кнопка взрыва под курсором — их правят вручную.
+
+Рядом есть `LIGHT_GROUND = [false, true, false, true]` — какие обложки считаются
+светлыми. От него зависит цвет прокрутки и подсветки. Если меняешь тёмную обложку
+на светлую, поменяй и здесь, и класс `cover--dark`/`cover--light` в разметке.
+
+**Фотографии** вшиты в массив `PHOTOS` в начале скрипта. Чтобы заменить: положи
+новые в `site/photos/`, пережми и подставь base64.
+
+```bash
+sips -Z 900 -s format jpeg -s formatOptions 62 site/photos/1.jpg --out /tmp/1.jpg
+base64 -i /tmp/1.jpg
+```
+
+Первая фотография идёт на вторую обложку, остальные — в карусель на третьей.
+
+**Звук взрыва** — `explosion-with-fire-flame.mp3`, вшит в константу `BOOM_MP3`.
+Играет всегда, выключателя нет. Декодируется при первом действии пользователя,
+поэтому первый же взрыв звучит без задержки. Заменить — тем же способом:
+
+```bash
+base64 -i site/sound/новый.mp3
+```
+
+**Тексты** — прямо в разметке обложек, никаких шаблонов.
+
+## Про React
+
+Проект начинался со скаффолда Vite + React, но сайт получился одним статическим
+файлом, и сборка ему не нужна. Скаффолд удалён; он остался в истории git и
+возвращается так:
+
+```bash
+git checkout HEAD -- package.json package-lock.json tsconfig.json tsconfig.app.json \
+  tsconfig.node.json vite.config.ts eslint.config.js index.html src public
+npm install
 ```

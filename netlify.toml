@@ -1,0 +1,9 @@
+# Сайт — один статический файл, собирается из site/covers.html скриптом tools/build.mjs.
+# Зависимостей нет: build.mjs использует только встроенные модули Node.
+# $URL подставляет Netlify — это адрес сайта, он нужен для og-тегов.
+[build]
+	command = "node tools/build.mjs --base=$URL"
+	publish = "dist"
+
+[build.environment]
+	NODE_VERSION = "24"
