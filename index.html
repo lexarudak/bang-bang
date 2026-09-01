@@ -181,7 +181,7 @@
 		margin: 0 auto;
 		perspective: 1400px;
 		transform-style: preserve-3d;
-		touch-action: none;
+		touch-action: pan-y;
 		cursor: grab;
 		pointer-events: auto;
 	}
@@ -403,7 +403,6 @@
 
 	.sb {
 		position: fixed;
-		pointer-events: none;
 		top: clamp(14px, 2.2vh, 30px);
 		bottom: clamp(14px, 2.2vh, 30px);
 		right: clamp(7px, 0.9vw, 15px);
@@ -422,6 +421,16 @@
 	.sb.show {
 		opacity: 1;
 	}
+	/* 3px is impossible to grab: widen the hit area, not the bar */
+	.sb::before {
+		content: "";
+		position: absolute;
+		inset: 0 -9px;
+	}
+	.sb:hover,
+	.sb.grabbing {
+		width: 7px;
+	}
 	.sb-thumb {
 		position: absolute;
 		left: 0;
@@ -430,6 +439,16 @@
 		background: var(--sb-thumb, rgba(243, 237, 227, 0.5));
 		will-change: transform;
 		transition: background-color 0.5s ease;
+	}
+	.sb:hover .sb-thumb,
+	.sb.grabbing .sb-thumb {
+		background: var(--sb-thumb-hot, rgba(243, 237, 227, 0.85));
+	}
+
+	@media (pointer: coarse) {
+		.sb {
+			pointer-events: none;
+		}
 	}
 
 	.hint {
@@ -973,7 +992,7 @@
 			smooth += (target - smooth) * (reduce ? 1 : 0.11);
 			if (Math.abs(target - smooth) < 0.05) smooth = target;
 			render();
-			stepPage(dt);
+			stepSettle(dt, now);
 			stepScrollbar(dt);
 			stepCarousel(dt);
 			stepBoom(dt);
@@ -987,6 +1006,8 @@
 		var sbThumbH = 44;
 		var sbIdx = -1;
 		var sbIdle = 99;
+		var sbHot = false;
+		var sbDrag = false;
 
 		function sizeScrollbar() {
 			sbTrack = sb.clientHeight;
@@ -1001,127 +1022,103 @@
 		}
 
 		function stepScrollbar(dt) {
+			if (sbHot || sbDrag) return;
 			sbIdle += dt;
 			if (sbIdle > 1.1) sb.classList.remove("show");
 		}
 
+		function sbJump(clientY) {
+			var r = sb.getBoundingClientRect();
+			var f =
+				(clientY - r.top - sbThumbH / 2) / Math.max(1, r.height - sbThumbH);
+			window.scrollTo(0, clamp01(f) * maxScroll());
+		}
+
+		sb.addEventListener("pointerenter", function () {
+			sbHot = true;
+			showScrollbar();
+		});
+		sb.addEventListener("pointerleave", function () {
+			sbHot = false;
+		});
+		sb.addEventListener("pointerdown", function (ev) {
+			sbDrag = true;
+			sb.classList.add("grabbing");
+			sb.setPointerCapture(ev.pointerId);
+			sbJump(ev.clientY);
+		});
+		sb.addEventListener("pointermove", function (ev) {
+			if (sbDrag) sbJump(ev.clientY);
+		});
+		function sbRelease() {
+			sbDrag = false;
+			sb.classList.remove("grabbing");
+		}
+		sb.addEventListener("pointerup", sbRelease);
+		sb.addEventListener("pointercancel", sbRelease);
+
 		sizeScrollbar();
 
-		// ---- paging ------------------------------------------------------------
-		// The page is a deck, not a document: one gesture moves exactly one cover.
-		// Native scrolling is taken over entirely, because phone momentum will
-		// always overshoot a section otherwise. `idx` is the cover on screen; every
-		// move is a fixed-duration tween between two anchors, so there is no such
-		// thing as resting half way.
-		var idx = 0;
-		var page = {
-			active: false,
-			from: 0,
-			to: 0,
-			t: 0,
-			dur: reduce ? 0.25 : 1.0,
-		};
+		// ---- settle ------------------------------------------------------------
+		// Releasing mid-transition is what leaves half-arrived text on screen and
+		// makes it unclear how much further to scroll. Once the scroll goes quiet,
+		// ease onto the nearest fully-assembled cover. Any input cancels it.
+		var lastScrollAt = 0;
+		var lastScrollY = 0;
+		var scrollDir = 1;
+		var settle = { active: false, from: 0, to: 0, t: 0 };
+		var SETTLE_DUR = 0.42;
 
-		function goToCover(i) {
-			i = Math.max(0, Math.min(ANCHORS.length - 1, i));
-			if (page.active || boom.active || i === idx) return;
-			page.from = window.scrollY || 0;
-			page.to = ANCHORS[i] * maxScroll();
-			page.t = 0;
-			page.active = true;
-			idx = i;
-			showScrollbar();
+		function cancelSettle() {
+			settle.active = false;
 		}
-
-		function stepPage(dt) {
-			if (!page.active) return;
-			page.t += dt;
-			var k = Math.min(1, page.t / page.dur);
-			var e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
-			var y = page.from + (page.to - page.from) * e;
-			window.scrollTo(0, y);
-			// drive the visual straight off the tween: the easing the lerp would add
-			// on top of it only makes the landing mushy
-			target = y;
-			smooth = y;
-			if (k >= 1) page.active = false;
-		}
-
-		// ---- input --------------------------------------------------------------
-		var wheelLock = 0;
-
-		window.addEventListener(
-			"wheel",
-			function (ev) {
-				ev.preventDefault();
-				if (Math.abs(ev.deltaY) < 8) return;
-				var now = performance.now();
-				// swallow the rest of the gesture, momentum included
-				if (page.active || now < wheelLock) return;
-				wheelLock = now + page.dur * 1000 + 260;
-				goToCover(idx + (ev.deltaY > 0 ? 1 : -1));
-			},
-			{ passive: false },
-		);
-
-		var touchY = 0;
-		var touchX = 0;
-		var touchLive = false;
-
-		window.addEventListener(
-			"touchstart",
-			function (ev) {
-				touchLive = ev.touches.length === 1;
-				if (!touchLive) return;
-				touchY = ev.touches[0].clientY;
-				touchX = ev.touches[0].clientX;
-				caraClaimed = false;
-			},
-			{ passive: true },
-		);
-		window.addEventListener(
-			"touchmove",
-			function (ev) {
-				ev.preventDefault();
-			},
-			{ passive: false },
-		);
-		window.addEventListener(
-			"touchend",
-			function (ev) {
-				if (!touchLive) return;
-				touchLive = false;
-				if (caraClaimed) return;
-				var t = ev.changedTouches[0];
-				var dy = t.clientY - touchY;
-				var dx = t.clientX - touchX;
-				if (Math.abs(dy) < 45 || Math.abs(dy) < Math.abs(dx)) return;
-				goToCover(idx + (dy < 0 ? 1 : -1));
-			},
-			{ passive: true },
-		);
-
-		window.addEventListener("keydown", function (ev) {
-			var k = ev.key;
-			if (k === "ArrowDown" || k === "PageDown" || k === " ") {
-				ev.preventDefault();
-				goToCover(idx + 1);
-			} else if (k === "ArrowUp" || k === "PageUp") {
-				ev.preventDefault();
-				goToCover(idx - 1);
-			} else if (k === "Home") {
-				ev.preventDefault();
-				goToCover(0);
-			} else if (k === "End") {
-				ev.preventDefault();
-				goToCover(ANCHORS.length - 1);
-			}
+		["wheel", "touchstart", "pointerdown", "keydown"].forEach(function (ev) {
+			window.addEventListener(ev, cancelSettle, { passive: true });
 		});
+
+		function stepSettle(dt, now) {
+			if (reduce || boom.active) return;
+			if (settle.active) {
+				settle.t += dt;
+				var k = Math.min(1, settle.t / SETTLE_DUR);
+				var e = 1 - Math.pow(1 - k, 3);
+				window.scrollTo(0, settle.from + (settle.to - settle.from) * e);
+				if (k >= 1) settle.active = false;
+				return;
+			}
+			if (now - lastScrollAt < 170) return;
+			var m = maxScroll();
+			var p = (window.scrollY || 0) / m;
+
+			// Commit in the direction of travel rather than to the nearest point:
+			// a deliberate flick forward should not get yanked back where it started.
+			var a = ANCHORS[0];
+			var bnd = ANCHORS[ANCHORS.length - 1];
+			for (var i = 0; i < ANCHORS.length - 1; i++) {
+				if (p >= ANCHORS[i] && p <= ANCHORS[i + 1]) {
+					a = ANCHORS[i];
+					bnd = ANCHORS[i + 1];
+					break;
+				}
+			}
+			var k = bnd > a ? (p - a) / (bnd - a) : 0;
+			var best = k > (scrollDir >= 0 ? 0.35 : 0.65) ? bnd : a;
+			if (Math.abs(best - p) < 0.004) return;
+			settle.from = window.scrollY || 0;
+			settle.to = best * m;
+			settle.t = 0;
+			settle.active = true;
+		}
 
 		window.addEventListener(
 			"scroll",
 			function () {
 				target = window.scrollY || window.pageYOffset;
+				if (!settle.active && target !== lastScrollY) {
+					scrollDir = target > lastScrollY ? 1 : -1;
+				}
+				lastScrollY = target;
+				lastScrollAt = performance.now();
 				showScrollbar();
 			},
 			{ passive: true },
@@ -1151,7 +1148,6 @@
 		var dragX = 0;
 		var dragFrom = 0;
 		var dragMoved = 0;
-		var caraClaimed = false;
 
 		for (var si = 0; si < N; si++) {
 			var sl = document.createElement("div");
@@ -1227,7 +1223,6 @@
 			if (!dragging) return;
 			var dx = ev.clientX - dragX;
 			dragMoved = Math.max(dragMoved, Math.abs(dx));
-			if (dragMoved > 8) caraClaimed = true;
 			caraTarget = dragFrom - dx / (caraFrame.clientWidth * (SPREAD / 100));
 			caraCur = caraTarget;
 			layoutCara();
@@ -1539,8 +1534,6 @@
 			window.scrollTo(0, 0);
 			target = 0;
 			smooth = 0;
-			idx = 0;
-			page.active = false;
 
 			playBoom();
 		}
