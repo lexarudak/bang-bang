@@ -1,6 +1,6 @@
 // Локальный просмотр сайта с автоперезагрузкой.
 //
-// site/index.html — обычная готовая страница, её можно просто открыть в браузере.
+// index.html — обычная готовая страница, её можно просто открыть в браузере.
 // Этот сервер нужен только ради одного: сохранил файл — вкладка обновилась сама.
 //
 //   node serve.mjs            → http://localhost:8787
@@ -10,7 +10,7 @@ import { readFile, stat } from "node:fs/promises";
 import { extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = resolve(fileURLToPath(new URL("./site", import.meta.url)));
+const ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)));
 const ENTRY = "index.html";
 const PORT = Number(process.env.PORT || 8787);
 
@@ -49,7 +49,8 @@ createServer(async (req, res) => {
 
 		const name = url.pathname === "/" ? ENTRY : url.pathname.replace(/^\/+/, "");
 		const file = resolve(ROOT, name);
-		if (!file.startsWith(ROOT)) {
+		// сервер теперь смотрит в корень репозитория — не отдаём служебное
+		if (!file.startsWith(ROOT) || /(^|\/)\./.test(name)) {
 			res.writeHead(403).end("nope");
 			return;
 		}

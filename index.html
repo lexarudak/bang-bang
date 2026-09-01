@@ -849,11 +849,14 @@
 
 		// where a cover sits fully assembled — the scroll settles onto these
 		var ANCHORS = [0, 0.33, 0.67, 1];
+		// One segment per cover, filling as that cover is reached. The first is full
+		// from the outset because that is where you start; the empty part of the one
+		// currently filling is exactly "how much further to the next cover".
 		var BAR_SPANS = [
+			[-1, 0],
 			[0, 0.33],
 			[0.33, 0.67],
-			[0.67, 0.98],
-			[0.98, 1],
+			[0.67, 1],
 		];
 
 		var barFills = BAR_SPANS.map(function () {
@@ -963,7 +966,12 @@
 				(p * Math.max(0, sbTrack - sbThumbH)).toFixed(1) +
 				"px,0)";
 
-			var n = p < 0.2 ? 1 : p < 0.5 ? 2 : p < 0.8 ? 3 : 4;
+			// counter flips at the midpoint between anchors, so it stays in step with
+			// the bar instead of running on thresholds of its own
+			var n = 1;
+			for (var ni = 1; ni < ANCHORS.length; ni++) {
+				if (p >= (ANCHORS[ni - 1] + ANCHORS[ni]) / 2) n = ni + 1;
+			}
 			activeIdx = n - 1;
 			if (activeIdx !== sbIdx) {
 				sbIdx = activeIdx;

@@ -1,5 +1,5 @@
 # Публикация сайта на GitHub Pages.
-# Сборки нет: site/ содержит готовый index.html, его и отдаём.
+# Сборки нет: в корне лежит готовый index.html, его и отдаём.
 name: Deploy
 
 on:
@@ -30,11 +30,11 @@ jobs:
       # Задаётся в Settings → Secrets and variables → Actions → Variables.
       - name: CNAME
         if: vars.SITE_BASE != ''
-        run: echo "${{ vars.SITE_BASE }}" | sed -E 's#^https?://##; s#/.*##' > site/CNAME
+        run: echo "${{ vars.SITE_BASE }}" | sed -E 's#^https?://##; s#/.*##' > CNAME
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: site
+          path: .
 
       - id: deployment
         uses: actions/deploy-pages@v4
