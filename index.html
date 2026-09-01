@@ -10,8 +10,64 @@
 		<meta property="og:type" content="website" />
 		<meta property="og:title" content="Мария Сокирко — врач-косметолог" />
 		<meta property="og:description" content="Врач-косметолог в Москве. Работа с лицом как с портретом — бережно и точно. Телеграм-канал о работе и результатах." />
+
+		<!-- Экран загрузки. Живёт в head отдельным блоком, потому что основной
+		     стиль лежит после почти мегабайта тела: пока парсер до него дойдёт,
+		     без этого видно белый экран, а затем все четыре обложки разом —
+		     их прозрачность выставляет скрипт, а он ещё не отработал.
+		     Цвета продублированы намеренно: здесь ещё нет переменных палитры. -->
+		<style>
+			html,
+			body {
+				margin: 0;
+				background: #19191f;
+			}
+			#boot {
+				position: fixed;
+				inset: 0;
+				z-index: 999;
+				background: #19191f;
+				display: grid;
+				place-items: center;
+				transition: opacity 0.55s ease;
+			}
+			#boot.done {
+				opacity: 0;
+				pointer-events: none;
+			}
+			#boot span {
+				display: block;
+				width: min(150px, 36vw);
+				height: 2px;
+				background: rgba(243, 237, 227, 0.16);
+				overflow: hidden;
+			}
+			#boot span::after {
+				content: "";
+				display: block;
+				height: 100%;
+				width: 38%;
+				background: #f3ede3;
+				animation: bootSweep 1.15s cubic-bezier(0.65, 0.05, 0.35, 1) infinite;
+			}
+			@keyframes bootSweep {
+				from {
+					transform: translateX(-110%);
+				}
+				to {
+					transform: translateX(270%);
+				}
+			}
+			@media (prefers-reduced-motion: reduce) {
+				#boot span::after {
+					animation: none;
+					width: 100%;
+				}
+			}
+		</style>
 	</head>
 	<body>
+		<div id="boot" aria-hidden="true"><span></span></div>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link
 	rel="stylesheet"
@@ -95,6 +151,10 @@
 		perspective: 1500px;
 		will-change: transform, opacity;
 		pointer-events: none;
+	}
+	/* без скрипта прозрачность не выставлена, и все четыре видны разом */
+	.cover + .cover {
+		opacity: 0;
 	}
 	.cover--dark {
 		color: var(--cream);
@@ -892,7 +952,8 @@
 		}
 
 		// intro: first cover's letters ride in on load, then scroll takes over
-		if (!reduce) {
+		function startIntro() {
+			if (reduce) return;
 			covers[0].querySelectorAll(".ch").forEach(function (ch, i) {
 				ch.style.animation =
 					"intro .95s cubic-bezier(.16,1,.3,1) backwards, shine 8s linear infinite";
@@ -1716,6 +1777,34 @@
 		smooth = target;
 		render();
 		requestAnimationFrame(loop);
+
+		// ---- boot ---------------------------------------------------------------
+		// Снимаем заставку, когда есть и разметка, и шрифты: display-гарнитура
+		// приезжает позже всего, и без ожидания первый кадр показывает подменный
+		// шрифт. Таймер — страховка на случай, если шрифты не доедут вовсе.
+		var boot = document.getElementById("boot");
+		var booted = false;
+
+		function bootDone() {
+			if (booted) return;
+			booted = true;
+			startIntro();
+			boot.classList.add("done");
+			setTimeout(function () {
+				if (boot.parentNode) boot.parentNode.removeChild(boot);
+			}, 700);
+		}
+
+		var fontsReady =
+			document.fonts && document.fonts.ready
+				? document.fonts.ready
+				: Promise.resolve();
+		fontsReady.then(function () {
+			requestAnimationFrame(function () {
+				requestAnimationFrame(bootDone);
+			});
+		});
+		setTimeout(bootDone, 5000);
 	})();
 </script>
 	</body>
