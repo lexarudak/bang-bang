@@ -23,6 +23,8 @@ const MIME = {
 	".webp": "image/webp",
 	".svg": "image/svg+xml",
 	".mp3": "audio/mpeg",
+	".txt": "text/plain; charset=utf-8",
+	".xml": "application/xml; charset=utf-8",
 };
 
 const RELOAD = `<script>

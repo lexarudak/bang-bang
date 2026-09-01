@@ -26,12 +26,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Свой домен Pages требует файлом CNAME рядом с индексом.
-      # Задаётся в Settings → Secrets and variables → Actions → Variables.
-      - name: CNAME
-        if: vars.SITE_BASE != ''
-        run: echo "${{ vars.SITE_BASE }}" | sed -E 's#^https?://##; s#/.*##' > CNAME
-
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .
