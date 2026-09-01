@@ -1,4 +1,17 @@
-<title>Четыре обложки</title>
+<!doctype html>
+<html lang="ru">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width,initial-scale=1" />
+		<title>Мария Сокирко — врач-косметолог</title>
+		<meta name="description" content="Врач-косметолог в Москве. Работа с лицом как с портретом — бережно и точно. Телеграм-канал о работе и результатах." />
+		<meta name="theme-color" content="#19191f" />
+		<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 fill=%27%2319191f%27/%3E%3Ccircle cx=%2716%27 cy=%2716%27 r=%277.5%27 fill=%27%23f3ede3%27/%3E%3C/svg%3E" />
+		<meta property="og:type" content="website" />
+		<meta property="og:title" content="Мария Сокирко — врач-косметолог" />
+		<meta property="og:description" content="Врач-косметолог в Москве. Работа с лицом как с портретом — бережно и точно. Телеграм-канал о работе и результатах." />
+	</head>
+	<body>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link
 	rel="stylesheet"
@@ -32,7 +45,7 @@
 		z-index: 0;
 	}
 	.scroller {
-		height: 900vh;
+		height: 560vh;
 		pointer-events: none;
 	}
 
@@ -302,11 +315,24 @@
 		position: fixed;
 		top: 0;
 		left: 0;
-		height: 3px;
-		background: #fff;
+		right: 0;
+		height: 4px;
+		display: flex;
+		gap: 3px;
 		mix-blend-mode: difference;
 		z-index: 6;
+		pointer-events: none;
+	}
+	/* the empty track is the point: it shows how much scroll is still ahead */
+	.bar-seg {
+		flex: 1 1 0;
+		background: rgba(255, 255, 255, 0.24);
+		overflow: hidden;
+	}
+	.bar-fill {
+		height: 100%;
 		width: 0;
+		background: #fff;
 	}
 
 	.tools {
@@ -806,18 +832,39 @@
 		var idxNum = document.getElementById("idxNum");
 		var hint = document.getElementById("hint");
 
+		// Three transitions spread across the whole range with only short reading
+		// holds between them. Before, 35% of the scroll produced no change at all.
 		var T = {
-			cream: [0.12, 0.26],
-			electric: [0.42, 0.56],
-			coral: [0.72, 0.86],
+			cream: [0.034, 0.23],
+			electric: [0.374, 0.57],
+			coral: [0.714, 0.91],
 		};
 		// covers hand off with a gap: nothing overlaps mid-transition
 		var C = [
-			{ inR: [-0.6, -0.15], outR: [0.1, 0.19] },
-			{ inR: [0.2, 0.29], outR: [0.42, 0.5] },
-			{ inR: [0.51, 0.6], outR: [0.72, 0.79] },
-			{ inR: [0.8, 0.88], outR: [2.0, 2.1] },
+			{ inR: [-0.6, -0.15], outR: [0.02, 0.146] },
+			{ inR: [0.174, 0.3], outR: [0.36, 0.486] },
+			{ inR: [0.514, 0.64], outR: [0.7, 0.826] },
+			{ inR: [0.854, 0.98], outR: [2.0, 2.1] },
 		];
+
+		// where a cover sits fully assembled — the scroll settles onto these
+		var ANCHORS = [0, 0.33, 0.67, 1];
+		var BAR_SPANS = [
+			[0, 0.33],
+			[0.33, 0.67],
+			[0.67, 0.98],
+			[0.98, 1],
+		];
+
+		var barFills = BAR_SPANS.map(function () {
+			var seg = document.createElement("div");
+			seg.className = "bar-seg";
+			var fill = document.createElement("div");
+			fill.className = "bar-fill";
+			seg.appendChild(fill);
+			bar.appendChild(seg);
+			return fill;
+		});
 
 		function clamp01(v) {
 			return v < 0 ? 0 : v > 1 ? 1 : v;
@@ -906,7 +953,10 @@
 				}
 			}
 
-			bar.style.width = (p * 100).toFixed(2) + "%";
+			for (var bi = 0; bi < BAR_SPANS.length; bi++) {
+				barFills[bi].style.width =
+					(range(p, BAR_SPANS[bi][0], BAR_SPANS[bi][1]) * 100).toFixed(1) + "%";
+			}
 
 			sbThumb.style.transform =
 				"translate3d(0," +
@@ -934,6 +984,7 @@
 			smooth += (target - smooth) * (reduce ? 1 : 0.11);
 			if (Math.abs(target - smooth) < 0.05) smooth = target;
 			render();
+			stepSettle(dt, now);
 			stepScrollbar(dt);
 			stepCarousel(dt);
 			stepBoom(dt);
@@ -1000,10 +1051,66 @@
 
 		sizeScrollbar();
 
+		// ---- settle ------------------------------------------------------------
+		// Releasing mid-transition is what leaves half-arrived text on screen and
+		// makes it unclear how much further to scroll. Once the scroll goes quiet,
+		// ease onto the nearest fully-assembled cover. Any input cancels it.
+		var lastScrollAt = 0;
+		var lastScrollY = 0;
+		var scrollDir = 1;
+		var settle = { active: false, from: 0, to: 0, t: 0 };
+		var SETTLE_DUR = 0.42;
+
+		function cancelSettle() {
+			settle.active = false;
+		}
+		["wheel", "touchstart", "pointerdown", "keydown"].forEach(function (ev) {
+			window.addEventListener(ev, cancelSettle, { passive: true });
+		});
+
+		function stepSettle(dt, now) {
+			if (reduce || boom.active) return;
+			if (settle.active) {
+				settle.t += dt;
+				var k = Math.min(1, settle.t / SETTLE_DUR);
+				var e = 1 - Math.pow(1 - k, 3);
+				window.scrollTo(0, settle.from + (settle.to - settle.from) * e);
+				if (k >= 1) settle.active = false;
+				return;
+			}
+			if (now - lastScrollAt < 170) return;
+			var m = maxScroll();
+			var p = (window.scrollY || 0) / m;
+
+			// Commit in the direction of travel rather than to the nearest point:
+			// a deliberate flick forward should not get yanked back where it started.
+			var a = ANCHORS[0];
+			var bnd = ANCHORS[ANCHORS.length - 1];
+			for (var i = 0; i < ANCHORS.length - 1; i++) {
+				if (p >= ANCHORS[i] && p <= ANCHORS[i + 1]) {
+					a = ANCHORS[i];
+					bnd = ANCHORS[i + 1];
+					break;
+				}
+			}
+			var k = bnd > a ? (p - a) / (bnd - a) : 0;
+			var best = k > (scrollDir >= 0 ? 0.35 : 0.65) ? bnd : a;
+			if (Math.abs(best - p) < 0.004) return;
+			settle.from = window.scrollY || 0;
+			settle.to = best * m;
+			settle.t = 0;
+			settle.active = true;
+		}
+
 		window.addEventListener(
 			"scroll",
 			function () {
 				target = window.scrollY || window.pageYOffset;
+				if (!settle.active && target !== lastScrollY) {
+					scrollDir = target > lastScrollY ? 1 : -1;
+				}
+				lastScrollY = target;
+				lastScrollAt = performance.now();
 				showScrollbar();
 			},
 			{ passive: true },
@@ -1603,3 +1710,5 @@
 		requestAnimationFrame(loop);
 	})();
 </script>
+	</body>
+</html>

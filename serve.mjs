@@ -1,31 +1,28 @@
-// Local preview for the site.
+// Локальный просмотр сайта с автоперезагрузкой.
 //
-// site/covers.html is an Artifact fragment: it has no <html>/<head>, because the
-// publisher supplies them. Here we wrap it the same way, add the charset the
-// Cyrillic needs, and inject a live-reload poll — so editing colours and
-// reloading is a save away. The source file itself is never touched.
+// site/index.html — обычная готовая страница, её можно просто открыть в браузере.
+// Этот сервер нужен только ради одного: сохранил файл — вкладка обновилась сама.
 //
-//   node tools/serve.mjs            → http://localhost:8787
-//   PORT=3000 node tools/serve.mjs
+//   node serve.mjs            → http://localhost:8787
+//   PORT=3000 node serve.mjs
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
-import { extname, resolve, join } from "node:path";
+import { extname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = resolve(fileURLToPath(new URL("../site", import.meta.url)));
-const ENTRY = "covers.html";
+const ROOT = resolve(fileURLToPath(new URL("./site", import.meta.url)));
+const ENTRY = "index.html";
 const PORT = Number(process.env.PORT || 8787);
 
 const MIME = {
 	".html": "text/html; charset=utf-8",
 	".js": "text/javascript; charset=utf-8",
 	".css": "text/css; charset=utf-8",
-	".json": "application/json; charset=utf-8",
 	".jpg": "image/jpeg",
-	".jpeg": "image/jpeg",
 	".png": "image/png",
 	".webp": "image/webp",
 	".svg": "image/svg+xml",
+	".mp3": "audio/mpeg",
 };
 
 const RELOAD = `<script>
@@ -44,7 +41,7 @@ createServer(async (req, res) => {
 	const url = new URL(req.url, "http://localhost");
 	try {
 		if (url.pathname === "/__mtime") {
-			const s = await stat(join(ROOT, ENTRY));
+			const s = await stat(resolve(ROOT, ENTRY));
 			res.writeHead(200, { "content-type": "text/plain", "cache-control": "no-store" });
 			res.end(String(s.mtimeMs));
 			return;
@@ -57,25 +54,18 @@ createServer(async (req, res) => {
 			return;
 		}
 
-		if (name === ENTRY) {
-			const body = await readFile(file, "utf8");
-			res.writeHead(200, { "content-type": MIME[".html"], "cache-control": "no-store" });
-			res.end(
-				'<!doctype html><html lang="ru"><head><meta charset="utf-8">' +
-					'<meta name="viewport" content="width=device-width,initial-scale=1">' +
-					"</head><body>" + body + RELOAD + "</body></html>",
-			);
-			return;
-		}
-
-		// read first: writing headers before the read means a missing file throws
-		// after they are already sent, and the 404 attempt then kills the process
+		// читаем до заголовков: иначе отсутствующий файл бросает уже после того,
+		// как они отправлены, и попытка ответить 404 роняет процесс
 		const buf = await readFile(file);
 		res.writeHead(200, {
 			"content-type": MIME[extname(file).toLowerCase()] || "application/octet-stream",
 			"cache-control": "no-store",
 		});
-		res.end(buf);
+		res.end(
+			name === ENTRY
+				? String(buf).replace("</body>", RELOAD + "\n</body>")
+				: buf,
+		);
 	} catch {
 		if (!res.headersSent) {
 			res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
@@ -83,5 +73,5 @@ createServer(async (req, res) => {
 		res.end("404");
 	}
 }).listen(PORT, () => {
-	console.log("site → http://localhost:" + PORT + "  (live reload on save)");
+	console.log("сайт → http://localhost:" + PORT + "  (перезагрузка при сохранении)");
 });
