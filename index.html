@@ -101,7 +101,7 @@
 		z-index: 0;
 	}
 	.scroller {
-		height: 560vh;
+		height: 440vh;
 		pointer-events: none;
 	}
 
@@ -907,7 +907,7 @@
 			{ inR: [0.854, 0.98], outR: [2.0, 2.1] },
 		];
 
-		// where a cover sits fully assembled — the scroll settles onto these
+		// где обложка стоит полностью собранной — по ним считается счётчик
 		var ANCHORS = [0, 0.33, 0.67, 1];
 		// One segment per cover, filling as that cover is reached. The first is full
 		// from the outset because that is where you start; the empty part of the one
@@ -1050,10 +1050,9 @@
 		function loop(now) {
 			var dt = lastT ? Math.min((now - lastT) / 1000, 1 / 30) : 1 / 60;
 			lastT = now;
-			smooth += (target - smooth) * (reduce ? 1 : 0.11);
+			smooth += (target - smooth) * (reduce ? 1 : 0.16);
 			if (Math.abs(target - smooth) < 0.05) smooth = target;
 			render();
-			stepSettle(dt, now);
 			stepScrollbar(dt);
 			stepCarousel(dt);
 			stepBoom(dt);
@@ -1120,66 +1119,10 @@
 
 		sizeScrollbar();
 
-		// ---- settle ------------------------------------------------------------
-		// Releasing mid-transition is what leaves half-arrived text on screen and
-		// makes it unclear how much further to scroll. Once the scroll goes quiet,
-		// ease onto the nearest fully-assembled cover. Any input cancels it.
-		var lastScrollAt = 0;
-		var lastScrollY = 0;
-		var scrollDir = 1;
-		var settle = { active: false, from: 0, to: 0, t: 0 };
-		var SETTLE_DUR = 0.42;
-
-		function cancelSettle() {
-			settle.active = false;
-		}
-		["wheel", "touchstart", "pointerdown", "keydown"].forEach(function (ev) {
-			window.addEventListener(ev, cancelSettle, { passive: true });
-		});
-
-		function stepSettle(dt, now) {
-			if (reduce || boom.active) return;
-			if (settle.active) {
-				settle.t += dt;
-				var k = Math.min(1, settle.t / SETTLE_DUR);
-				var e = 1 - Math.pow(1 - k, 3);
-				window.scrollTo(0, settle.from + (settle.to - settle.from) * e);
-				if (k >= 1) settle.active = false;
-				return;
-			}
-			if (now - lastScrollAt < 170) return;
-			var m = maxScroll();
-			var p = (window.scrollY || 0) / m;
-
-			// Commit in the direction of travel rather than to the nearest point:
-			// a deliberate flick forward should not get yanked back where it started.
-			var a = ANCHORS[0];
-			var bnd = ANCHORS[ANCHORS.length - 1];
-			for (var i = 0; i < ANCHORS.length - 1; i++) {
-				if (p >= ANCHORS[i] && p <= ANCHORS[i + 1]) {
-					a = ANCHORS[i];
-					bnd = ANCHORS[i + 1];
-					break;
-				}
-			}
-			var k = bnd > a ? (p - a) / (bnd - a) : 0;
-			var best = k > (scrollDir >= 0 ? 0.35 : 0.65) ? bnd : a;
-			if (Math.abs(best - p) < 0.004) return;
-			settle.from = window.scrollY || 0;
-			settle.to = best * m;
-			settle.t = 0;
-			settle.active = true;
-		}
-
 		window.addEventListener(
 			"scroll",
 			function () {
 				target = window.scrollY || window.pageYOffset;
-				if (!settle.active && target !== lastScrollY) {
-					scrollDir = target > lastScrollY ? 1 : -1;
-				}
-				lastScrollY = target;
-				lastScrollAt = performance.now();
 				showScrollbar();
 			},
 			{ passive: true },
