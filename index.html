@@ -105,40 +105,14 @@
 		pointer-events: none;
 	}
 
-	/* ---- background states -------------------------------------------- */
+	/* ---- слои ------------------------------------------------------------ */
+	/* Каждая обложка — самостоятельный экран со своим фоном, и лежит ПОД
+	   предыдущей. Переход — уход верхней: под ней уже собрана следующая,
+	   поэтому пустого фона без содержимого не бывает в принципе. */
 	.ground {
 		position: absolute;
 		inset: 0;
 		background: var(--coal);
-	}
-	.wipe {
-		position: absolute;
-		will-change: transform;
-		backface-visibility: hidden;
-	}
-
-	.wipe-cream {
-		top: -12vh;
-		left: -30%;
-		width: 160%;
-		height: 124vh;
-		background: var(--cream);
-		transform: translate3d(125%, 0, 0) skewX(-9deg);
-	}
-	.wipe-electric {
-		top: 50%;
-		left: 50%;
-		width: 150vmax;
-		height: 150vmax;
-		margin: -75vmax 0 0 -75vmax;
-		border-radius: 50%;
-		background: var(--electric);
-		transform: scale(0);
-	}
-	.wipe-coral {
-		inset: 0;
-		background: var(--coral);
-		transform: translate3d(0, 100%, 0);
 	}
 
 	/* ---- covers -------------------------------------------------------- */
@@ -152,12 +126,24 @@
 		will-change: transform, opacity;
 		pointer-events: none;
 	}
-	/* без скрипта прозрачность не выставлена, и все четыре видны разом */
-	.cover + .cover {
-		opacity: 0;
-	}
 	.cover--dark {
 		color: var(--cream);
+	}
+	[data-cover="1"] {
+		z-index: 4;
+		background: var(--coal);
+	}
+	[data-cover="2"] {
+		z-index: 3;
+		background: var(--cream);
+	}
+	[data-cover="3"] {
+		z-index: 2;
+		background: var(--electric);
+	}
+	[data-cover="4"] {
+		z-index: 1;
+		background: var(--coral);
 	}
 	.cover--light {
 		color: var(--coal);
@@ -376,23 +362,25 @@
 		top: 0;
 		left: 0;
 		right: 0;
-		height: 4px;
-		display: flex;
-		gap: 3px;
-		mix-blend-mode: difference;
+		height: 6px;
 		z-index: 6;
 		pointer-events: none;
-	}
-	/* the empty track is the point: it shows how much scroll is still ahead */
-	.bar-seg {
-		flex: 1 1 0;
-		background: rgba(255, 255, 255, 0.24);
-		overflow: hidden;
+		background: rgba(255, 255, 255, 0.32);
+		mix-blend-mode: difference;
 	}
 	.bar-fill {
 		height: 100%;
 		width: 0;
 		background: #fff;
+	}
+	/* засечки стоят там, где обложка собрана целиком: видно, сколько до следующей */
+	.bar-tick {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 3px;
+		margin-left: -1.5px;
+		background: rgba(255, 255, 255, 0.85);
 	}
 
 	.tools {
@@ -718,9 +706,6 @@
 
 <div class="stage">
 	<div class="ground"></div>
-	<div class="wipe wipe-cream" data-wipe="cream"></div>
-	<div class="wipe wipe-electric" data-wipe="electric"></div>
-	<div class="wipe wipe-coral" data-wipe="coral"></div>
 
 	<section class="cover cover--dark" data-cover="1">
 		<div class="eyebrow">врач-косметолог · Москва</div>
@@ -882,51 +867,36 @@
 			}
 		});
 
-		var wipes = {
-			cream: document.querySelector('[data-wipe="cream"]'),
-			electric: document.querySelector('[data-wipe="electric"]'),
-			coral: document.querySelector('[data-wipe="coral"]'),
-		};
 		var covers = [].slice.call(document.querySelectorAll("[data-cover]"));
 		var bar = document.getElementById("bar");
 		var idxNum = document.getElementById("idxNum");
 		var hint = document.getElementById("hint");
 
-		// Three transitions spread across the whole range with only short reading
-		// holds between them. Before, 35% of the scroll produced no change at all.
-		var T = {
-			cream: [0.034, 0.23],
-			electric: [0.374, 0.57],
-			coral: [0.714, 0.91],
-		};
-		// covers hand off with a gap: nothing overlaps mid-transition
+		// outR — окно, в котором обложка уходит и открывает следующую. Паузы между
+		// ними короткие: холостая прокрутка занимала 61% хода, стало около трети.
 		var C = [
-			{ inR: [-0.6, -0.15], outR: [0.02, 0.146] },
-			{ inR: [0.174, 0.3], outR: [0.36, 0.486] },
-			{ inR: [0.514, 0.64], outR: [0.7, 0.826] },
-			{ inR: [0.854, 0.98], outR: [2.0, 2.1] },
+			{ outR: [0.04, 0.28] },
+			{ outR: [0.36, 0.6] },
+			{ outR: [0.68, 0.92] },
+			{ outR: [2.0, 2.1] },
 		];
 
-		// где обложка стоит полностью собранной — по ним считается счётчик
-		var ANCHORS = [0, 0.33, 0.67, 1];
+		// Моменты, когда очередная обложка открыта целиком: предыдущая ушла до конца.
+		// По ним стоят засечки на полосе и переключается счётчик.
+		var REVEALED = C.slice(0, 3).map(function (cfg) {
+			return cfg.outR[1];
+		});
 		// One segment per cover, filling as that cover is reached. The first is full
 		// from the outset because that is where you start; the empty part of the one
 		// currently filling is exactly "how much further to the next cover".
-		var BAR_SPANS = [
-			[-1, 0],
-			[0, 0.33],
-			[0.33, 0.67],
-			[0.67, 1],
-		];
-
-		var barFills = BAR_SPANS.map(function () {
-			var seg = document.createElement("div");
-			seg.className = "bar-seg";
-			var fill = document.createElement("div");
-			fill.className = "bar-fill";
-			seg.appendChild(fill);
-			bar.appendChild(seg);
-			return fill;
+		var barFill = document.createElement("div");
+		barFill.className = "bar-fill";
+		bar.appendChild(barFill);
+		REVEALED.forEach(function (a) {
+			var tick = document.createElement("div");
+			tick.className = "bar-tick";
+			tick.style.left = (a * 100).toFixed(2) + "%";
+			bar.appendChild(tick);
 		});
 
 		function clamp01(v) {
@@ -962,76 +932,78 @@
 			});
 		}
 
+		// Формы совпадают с прежними шторами, но теперь снимают уходящую обложку,
+		// а не приносят новый фон: под срезом сразу видно готовую следующую.
+		var leave = [0, 0, 0, 0];
+
+		function peel(el, i, lv) {
+			if (i === 0) {
+				// косой срез под тем же углом, что была штора
+				var skew = 7.92 * (window.innerHeight / Math.max(1, window.innerWidth));
+				var edge = 130 - 160 * lv;
+				el.style.clipPath =
+					lv <= 0
+						? "none"
+						: "polygon(-40% 0%, " +
+							(edge + skew).toFixed(2) +
+							"% 0%, " +
+							(edge - skew).toFixed(2) +
+							"% 100%, -40% 100%)";
+			} else if (i === 1) {
+				// круглая дыра, растущая из центра
+				var r = (lv * Math.hypot(window.innerWidth, window.innerHeight)) / 2;
+				var m =
+					lv <= 0
+						? "none"
+						: "radial-gradient(circle at 50% 50%, transparent 0 " +
+							r.toFixed(0) +
+							"px, #000 " +
+							r.toFixed(0) +
+							"px)";
+				el.style.webkitMaskImage = m;
+				el.style.maskImage = m;
+			} else if (i === 2) {
+				// край, поднимающийся снизу
+				el.style.clipPath =
+					lv <= 0 ? "none" : "inset(0% 0% " + (lv * 100).toFixed(2) + "% 0%)";
+			}
+		}
+
 		function render() {
 			var p = smooth / maxScroll();
 
-			var c = easeOut(range(p, T.cream[0], T.cream[1]));
-			wipes.cream.style.transform =
-				"translate3d(" + (125 - 125 * c) + "%, 0, 0) skewX(-9deg)";
+			for (var i = 0; i < covers.length; i++) leave[i] = ease(range(p, C[i].outR[0], C[i].outR[1]));
 
-			var e = ease(range(p, T.electric[0], T.electric[1]));
-			wipes.electric.style.transform = "scale(" + e.toFixed(4) + ")";
-
-			var k = easeOut(range(p, T.coral[0], T.coral[1]));
-			wipes.coral.style.transform =
-				"translate3d(0, " + (100 - 100 * k) + "%, 0)";
-
-			for (var i = 0; i < covers.length; i++) {
-				var cfg = C[i];
+			for (i = 0; i < covers.length; i++) {
 				var el = covers[i];
-				var enter = ease(range(p, cfg.inR[0], cfg.inR[1]));
-				var exit = ease(range(p, cfg.outR[0], cfg.outR[1]));
-				var vis = enter * (1 - exit);
+				var lv = leave[i];
+				// открыта настолько, насколько ушла предыдущая
+				var rv = i === 0 ? 1 : leave[i - 1];
 
-				el.style.opacity = vis.toFixed(3);
-				el.style.pointerEvents = vis > 0.9 ? "auto" : "none";
-				coverVis[i] = vis;
+				peel(el, i, lv);
+				coverVis[i] = rv * (1 - lv);
+				// уходящая чуть сносится, открывающаяся оседает из глубины
 				el.style.transform =
-					"translate3d(0," + ((1 - enter) * 4 - exit * 4).toFixed(3) + "vh,0)";
-
-				var chars = el.querySelectorAll(".ch");
-				for (var j = 0; j < chars.length; j++) {
-					var d = j * 0.004;
-					var ce = easeOut(range(p, cfg.inR[0] + d, cfg.inR[1] + d));
-					var cx = ease(range(p, cfg.outR[0] + d, cfg.outR[1] + d));
-					chars[j].style.transform =
-						"translate3d(0," + ((1 - ce) * 110 - cx * 110).toFixed(2) + "%,0)";
-				}
-
-				var planes = el.querySelectorAll(".plane");
-				for (var q = 0; q < planes.length; q++) {
-					var pd = q * 0.018;
-					var pe = easeOut(range(p, cfg.inR[0] + pd, cfg.inR[1] + pd));
-					var px = ease(range(p, cfg.outR[0] + pd, cfg.outR[1] + pd));
-					var rot = (1 - pe) * -70 + px * 70;
-					var z = (1 - pe) * -240 - px * 240;
-					var scale = reduce ? 1 : 0.9 + pe * 0.1;
-					planes[q].style.transform =
-						"translate3d(0,0," +
-						z.toFixed(1) +
-						"px) rotateY(" +
-						rot.toFixed(2) +
-						"deg) scale(" +
-						scale.toFixed(3) +
-						")";
-				}
+					"translate3d(0," +
+					(-lv * 3).toFixed(2) +
+					"vh,0) scale(" +
+					(1 + (1 - rv) * 0.04).toFixed(4) +
+					")";
+				el.style.pointerEvents = lv >= 1 ? "none" : "";
 			}
 
-			for (var bi = 0; bi < BAR_SPANS.length; bi++) {
-				barFills[bi].style.width =
-					(range(p, BAR_SPANS[bi][0], BAR_SPANS[bi][1]) * 100).toFixed(1) + "%";
-			}
+			barFill.style.width = (p * 100).toFixed(2) + "%";
 
 			sbThumb.style.transform =
 				"translate3d(0," +
 				(p * Math.max(0, sbTrack - sbThumbH)).toFixed(1) +
 				"px,0)";
 
-			// counter flips at the midpoint between anchors, so it stays in step with
-			// the bar instead of running on thresholds of its own
+			// счётчик переключается на середине ухода предыдущей обложки —
+			// там, где новая уже занимает большую часть экрана
 			var n = 1;
-			for (var ni = 1; ni < ANCHORS.length; ni++) {
-				if (p >= (ANCHORS[ni - 1] + ANCHORS[ni]) / 2) n = ni + 1;
+			for (var ni = 0; ni < 3; ni++) {
+				if (p >= (C[ni].outR[0] + C[ni].outR[1]) / 2) n = ni + 2;
 			}
 			activeIdx = n - 1;
 			if (activeIdx !== sbIdx) {
